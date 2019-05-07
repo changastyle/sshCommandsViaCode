@@ -16,7 +16,7 @@ import java.lang.reflect.Type;
 
 public class wsSSH 
 {
-    public static List<String> ssh( String host, String user, String pass, String comando)
+    public static List<String> ssh( String host, String user, String pass, String comando , boolean verbose)
     {
         List<String> lineasDeSalida = new ArrayList<String>();
         
@@ -65,7 +65,11 @@ public class wsSSH
                     
                     String aux = new String(tmp,0,i);
                     lineasDeSalida.add(aux);
-                    System.out.print(aux);
+                    
+                    if(verbose)
+                    {
+                        System.out.print(aux);
+                    }
                 }
                 if(channel.isClosed())
                 {
@@ -98,7 +102,7 @@ public class wsSSH
         return lineasDeSalida;
     }
     
-    public static List<String> sshSession( String host, String user, String pass, String comando)
+    public static List<String> sshSession( String host, String user, String pass, List<String> arrComandos , String lineaFin)
     {
         List<String> lineasDeSalida = new ArrayList<String>();
         
@@ -127,17 +131,21 @@ public class wsSSH
             
             InputStream in=channel.getInputStream();
 
-            channel.connect();
-            List arrComandos1 = new ArrayList<String>();
+            channel.connect(3 * 1000);
+            /*List arrComandos1 = new ArrayList<String>();
+            arrComandos1.add(comando);
             arrComandos1.add("cd /root/update_flex_android");
             arrComandos1.add("./patch_flex.sh uftpd-cnq lista_cnq");
             arrComandos1.add("tecacc");
-            sendCommands(channel,arrComandos1 );
+            sendCommands(channel,arrComandos1 );*/
+            sendCommands(channel,arrComandos );
+            
+            boolean termino = false;
             
             byte[] tmp=new byte[1024];
-            while(true)
+            while(!termino)
             {
-                while(in.available()>0)
+                while(!termino && in.available()>0)
                 {
                     int i=in.read(tmp, 0, 1024);
                     if(i<0)
@@ -151,9 +159,18 @@ public class wsSSH
                     if(aux.contains("password:"))
                     {
                         System.out.println(aux);
-                        List arrComandos = new ArrayList<String>();
-                        arrComandos.add("tecacc");
-                        sendCommands(channel,arrComandos );
+                        List arrComandosPassword = new ArrayList<String>();
+                        arrComandosPassword.add(pass);
+                        sendCommands(channel,arrComandosPassword );
+                    }
+                    /*else if(aux.endsWith(lineaFin))*/
+                    else if(aux.contains(lineaFin) || aux.endsWith("#") || aux.endsWith("$"))
+                    {
+                        System.out.print(aux);
+                        System.out.print("FIN");
+                        termino = true;
+                        break;
+                       
                     }
                     else
                     {
@@ -183,7 +200,10 @@ public class wsSSH
            // channel.setOutputStream(System.out);
 
             //channel.connect();
-            channel.connect(3*1000);
+            /*if(channel != null)
+            {
+                channel.connect(3*1000);
+            }*/
 
             
         }
@@ -194,29 +214,34 @@ public class wsSSH
 
         return lineasDeSalida;
     }
-    private static void sendCommands(Channel channel, List<String> commands){
+    private static void sendCommands(Channel channel, List<String> commands)
+    {
 
-    try{
-        PrintStream out = new PrintStream(channel.getOutputStream());
+        try
+        {
+            PrintStream out = new PrintStream(channel.getOutputStream());
 
-        //out.println("#!/bin/bash");
-        for(String command : commands){
-            out.println(command);
-            //out.println(command);
+            //out.println("#!/bin/bash");
+            for(String command : commands)
+            {
+                out.println(command);
+                //out.println(command);
+            }
+            //out.println("exit");
+
+            out.flush();
         }
-        //out.println("exit");
-
-        out.flush();
-    }catch(Exception e){
-        System.out.println("Error while sending commands: "+ e);
-    }
+        catch(Exception e)
+        {
+            System.out.println("Error while sending commands: "+ e);
+        }
     }
     
     public static boolean ping(String direccionIP )
     {
         boolean vivo = false;
         long inicio = System.currentTimeMillis();
-        List<String> arrSalida = ssh("192.168.5.4","root","tecacc","ping " + direccionIP + " -c 1");
+        List<String> arrSalida = ssh("192.168.5.4","root","tecacc","ping " + direccionIP + " -c 1",false);
         
         //1 - GUARDO TODA LA SALIDA DEL SSH EN UNA VARIABLE ACUMULADOR:
         String acumulador = "";
