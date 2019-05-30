@@ -9,10 +9,15 @@ public class Automated {
 
     public static void main(String[] args) 
     {
+        String ip = "10.253.9.56";
+        System.out.println("ping (" + ip + "): " + wsSSH.ping(ip)); 
         
-        System.out.println("ping: " + wsSSH.ping("192.168.5.4")); 
-        
+        List arrComandos = new ArrayList<String>();
+        arrComandos.add("cat /etc/config/net");
+        wsSSH.sshSession(ip, "root", "tecacc",2200 ,arrComandos,"eee");
        
+        
+        /*
         List<String> lineasEntrada = ManejoArchivos.read("C:\\update-masivo\\lista-parche");
         List<String> lineasError = new ArrayList<>();
         
@@ -33,7 +38,7 @@ public class Automated {
                     
                 }
             }
-        }
+        }*/
         
         
         //System.out.println("conectando..");

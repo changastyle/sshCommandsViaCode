@@ -16,20 +16,22 @@ import java.lang.reflect.Type;
 
 public class wsSSH 
 {
+    private static  Session session;
+    private static Channel channel;
+    
     public static List<String> ssh( String host, String user, String pass, String comando , boolean verbose)
     {
         List<String> lineasDeSalida = new ArrayList<String>();
         
         String password = pass;
-        int port=22;
+        int port = 22;
 
-        
         try
         {
             JSch jsch = new JSch();  
             //System.getProperty("user.name")
             
-            Session session = jsch.getSession(user, host, 22);
+            session = jsch.getSession(user, host, 22);
             session.setPassword(password);
             
             //FINGERPRINT
@@ -39,7 +41,7 @@ public class wsSSH
             
             session.connect();
             
-            Channel channel=session.openChannel("exec");
+            channel=session.openChannel("exec");
             ((ChannelExec)channel).setCommand(comando);
             
             //channel.setInputStream(System.in);
@@ -89,11 +91,7 @@ public class wsSSH
                     ee.printStackTrace();
                 }
             }
-            
-        channel.disconnect();
-        session.disconnect();
-            
-    }
+        }
         catch(Exception e)
         {
             e.printStackTrace();
@@ -102,19 +100,29 @@ public class wsSSH
         return lineasDeSalida;
     }
     
-    public static List<String> sshSession( String host, String user, String pass, List<String> arrComandos , String lineaFin)
+    public static void exit()
+    {
+        if(channel != null)
+        {
+            if(channel.isConnected())
+            {
+                channel.disconnect();
+            }
+        }
+    }
+    public static List<String> sshSession( String host, String user, String pass, int port, List<String> arrComandos , String lineaFin)
     {
         List<String> lineasDeSalida = new ArrayList<String>();
         
         String password = pass;
-        int port=22;
+        //int port=22;
 
         
         try
         {
             JSch jsch = new JSch();  
 
-            Session session=jsch.getSession(user, host, 22);
+            session=jsch.getSession(user, host, port);
             java.util.Properties config = new java.util.Properties(); 
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
@@ -125,7 +133,7 @@ public class wsSSH
 
             session.connect(30000);   // making a connection with timeout.
 
-            Channel channel = session.openChannel("shell");
+            channel = session.openChannel("shell");
 
             channel.setInputStream(System.in);
             
@@ -138,74 +146,65 @@ public class wsSSH
             arrComandos1.add("./patch_flex.sh uftpd-cnq lista_cnq");
             arrComandos1.add("tecacc");
             sendCommands(channel,arrComandos1 );*/
-            sendCommands(channel,arrComandos );
-            
-            boolean termino = false;
-            
-            byte[] tmp=new byte[1024];
-            while(!termino)
+            for(String comando : arrComandos)
             {
-                while(!termino && in.available()>0)
+                sendSingleCommand(comando);
+                boolean terminoComando = false;
+            
+                byte[] tmp=new byte[1024];
+                while(!terminoComando)
                 {
-                    int i=in.read(tmp, 0, 1024);
-                    if(i<0)
+                    while(!terminoComando && in.available()>0)
                     {
+                        int i=in.read(tmp, 0, 1024);
+                        if(i<0)
+                        {
+                            break;
+                        }
+
+                        String aux = new String(tmp,0,i);
+                        lineasDeSalida.add(aux);
+
+                        if(aux.contains("password:"))
+                        {
+                            System.out.println(aux);
+                            sendSingleCommand(pass);
+                        }
+                        /*else if(aux.endsWith(lineaFin))*/
+                        /*else*/
+                        if(aux.contains(lineaFin) /*|| aux.endsWith("#") || aux.endsWith("$")*/)
+                        {
+                            System.out.print(aux);
+                            //System.out.print("FIN");
+                            terminoComando = true;
+                            break;
+
+                        }
+                        else
+                        {
+                            System.out.print(aux);
+                        }
+
+                    }
+                    if(channel.isClosed())
+                    {
+                        if(in.available()>0)
+                        {
+                            continue;
+                        } 
+                        //System.out.println("exit-status: "+channel.getExitStatus());
                         break;
                     }
-                    
-                    String aux = new String(tmp,0,i);
-                    lineasDeSalida.add(aux);
-                    
-                    if(aux.contains("password:"))
+                    try
                     {
-                        System.out.println(aux);
-                        List arrComandosPassword = new ArrayList<String>();
-                        arrComandosPassword.add(pass);
-                        sendCommands(channel,arrComandosPassword );
+                        Thread.sleep(1000);
                     }
-                    /*else if(aux.endsWith(lineaFin))*/
-                    else if(aux.contains(lineaFin) || aux.endsWith("#") || aux.endsWith("$"))
+                    catch(Exception ee)
                     {
-                        System.out.print(aux);
-                        System.out.print("FIN");
-                        termino = true;
-                        break;
-                       
+                        ee.printStackTrace();
                     }
-                    else
-                    {
-                        System.out.print(aux);
-                    }
-                    
-                }
-                if(channel.isClosed())
-                {
-                    if(in.available()>0)
-                    {
-                        continue;
-                    } 
-                    //System.out.println("exit-status: "+channel.getExitStatus());
-                    break;
-                }
-                try
-                {
-                    Thread.sleep(1000);
-                }
-                catch(Exception ee)
-                {
-                    ee.printStackTrace();
                 }
             }
-            
-           // channel.setOutputStream(System.out);
-
-            //channel.connect();
-            /*if(channel != null)
-            {
-                channel.connect(3*1000);
-            }*/
-
-            
         }
         catch(Exception e)
         {
@@ -214,7 +213,24 @@ public class wsSSH
 
         return lineasDeSalida;
     }
-    private static void sendCommands(Channel channel, List<String> commands)
+    private static void sendSingleCommand(String command)
+    {
+
+        try
+        {
+            PrintStream out = new PrintStream(channel.getOutputStream());
+            
+            out.println(command);
+            
+            //out.println("exit");
+            out.flush();
+        }
+        catch(Exception e)
+        {
+            System.out.println("Error while sending commands: "+ e);
+        }
+    }
+    private static void sendCommands(List<String> commands)
     {
 
         try
@@ -227,7 +243,7 @@ public class wsSSH
                 out.println(command);
                 //out.println(command);
             }
-            //out.println("exit");
+            out.println("exit");
 
             out.flush();
         }
